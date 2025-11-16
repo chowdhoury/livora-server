@@ -30,57 +30,80 @@ async function run() {
     );
 
     const database = client.db("livoraDB");
-    const userCollection = database.collection("users");
     const propertiesCollection = database.collection("properties");
     const ratingsCollection = database.collection("ratings");
 
-    app.get("/api/users", async (req, res) => {
-      const query = {};
-      if (req.query.email) {
-        query.email = req.query.email;
-      }
-      const cursor = userCollection.find(query);
-      const users = await cursor.toArray();
-      res.send(users);
-    });
-
-    app.post("/api/users",  async (req, res) => {
-      const newUser = req.body;
-      const result = await userCollection.insertOne(newUser);
-      res.send(result);
-    });
-
-
-
-    // Properties API
+    // using 
     app.get("/api/properties", async (req, res) => {
-      const query = {};
-      if (req.query.email) {
-        query.userEmail = req.query.email;
+      try {
+        const sort = req.query.sort;
+        const search = req.query.search || "";
+
+        let sortQuery = { createdAt: -1 };
+
+        if (sort === "oldest") {
+          sortQuery = { createdAt: 1 };
+        } else if (sort === "highest") {
+          sortQuery = { costing: -1 };
+        } else if (sort === "lowest") {
+          sortQuery = { costing: 1 };
+        }
+
+        const searchQuery = search
+          ? { name: { $regex: search, $options: "i" } }
+          : {};
+
+        const properties = await propertiesCollection
+          .find(searchQuery, {
+            projection: {
+              sellerEmail: 0,
+              sellerImage: 0,
+            },
+          })
+          .sort(sortQuery)
+          .toArray();
+
+        res.send(properties);
+      } catch (error) {
+        res.status(500).send([]);
       }
-      const cursor = propertiesCollection.find(query).sort({ createdAt: -1 });
-      const properties = await cursor.toArray();
-      res.send(properties);
     });
 
-
+    // Using
     app.get("/api/properties/featured", async (req, res) => {
-      const query = {};
-      const cursor = propertiesCollection.find(query).sort({ createdAt: -1 }).limit(6);
-      const properties = await cursor.toArray();
-      res.send(properties);
+      try {
+        const result = await propertiesCollection
+          .find(
+            {},
+            {
+              projection: {
+                _id: 1,
+                category: 1,
+                image: 1,
+                name: 1,
+                location: 1,
+                description: 1,
+                costing: 1,
+              },
+            }
+          )
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        res.send([]);
+      }
     });
+
+
 
     app.get("/api/properties/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const property = await propertiesCollection.findOne(query);
       const userQuery = { email: property.userEmail };
-      const user = await userCollection.findOne(userQuery);
-      property.userName = user?.name || "Unknown";
-      property.userPhoto = user?.photoURL || "";
-      
-      // console.log('ok',property.userPhoto);
       res.send(property);
     });
 
@@ -108,45 +131,43 @@ async function run() {
       res.send(result);
     });
 
-
     // Ratings API
     app.get("/api/ratings", async (req, res) => {
       const filter = {};
-      if(req.query.email){
-        filter.reviewerEmail = req.query.email;
+      if (req.query.email) {
+        filter.userEmail = req.query.email;
       }
+      // console.log('filter',filter);
       const cursor = ratingsCollection.find(filter);
       const ratings = await cursor.toArray();
       res.send(ratings);
     });
 
-   app.get("/api/ratings/property/:propertyId", async (req, res) => {
-     const propertyId = req.params.propertyId;
-     const userEmail = req.query.email;
+    app.get("/api/ratings/property/:propertyId", async (req, res) => {
+      const propertyId = req.params.propertyId;
+      const userEmail = req.query.email;
 
-     const query = {
-       propertyId: propertyId,
-       userEmail: { $ne: userEmail }, // exclude current user's rating
-     };
+      const query = {
+        propertyId: propertyId,
+        userEmail: { $ne: userEmail }, // exclude current user's rating
+      };
 
-     const ratings = await ratingsCollection.find(query).toArray();
-     res.send(ratings);
-   });
-    
-   app.get("/api/myRatings/property/:propertyId", async (req, res) => {
-     const propertyId = req.params.propertyId;
-     const userEmail = req.query.email;
+      const ratings = await ratingsCollection.find(query).toArray();
+      res.send(ratings);
+    });
 
-     const query = {
-       propertyId: propertyId,
-       userEmail: userEmail,
-     };
+    app.get("/api/myRatings/property/:propertyId", async (req, res) => {
+      const propertyId = req.params.propertyId;
+      const userEmail = req.query.email;
 
-     const result = await ratingsCollection.findOne(query);
-     res.send(result);
-   });
+      const query = {
+        propertyId: propertyId,
+        userEmail: userEmail,
+      };
 
-
+      const result = await ratingsCollection.findOne(query);
+      res.send(result);
+    });
 
     app.post("/api/ratings", async (req, res) => {
       const newRating = req.body;
@@ -154,7 +175,13 @@ async function run() {
       res.send(result);
     });
 
-
+    app.delete("/api/ratings/:propertyId", async (req, res) => {
+      // console.log('delete rating called');
+      const propertyId = req.params.propertyId;
+      const query = { propertyId: propertyId };
+      const result = await ratingsCollection.deleteMany(query);
+      res.send(result);
+    });
   } finally {
   }
 }
