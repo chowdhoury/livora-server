@@ -183,6 +183,11 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/api/ratings/:propertyId", async (req, res) => {
+      const result = await ratingsCollection.deleteMany({propertyId:req.params.propertyId});
+      res.send(result);
+    });
+
 
   } finally {
   }
