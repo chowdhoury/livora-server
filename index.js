@@ -61,7 +61,7 @@ async function run() {
           ...emailQuery,
         };
 
-        console.log("Final Query:", finalQuery);
+        // console.log("Final Query:", finalQuery);
 
         const properties = await propertiesCollection
           .find(finalQuery, {
@@ -75,7 +75,7 @@ async function run() {
 
         res.send(properties);
       } catch (error) {
-        console.log(error);
+        // console.log(error);
         res.send([]);
       }
     });
