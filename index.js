@@ -38,6 +38,7 @@ async function run() {
       try {
         const sort = req.query.sort;
         const search = req.query.search || "";
+        const userEmail = req.query.email || "";
 
         let sortQuery = { createdAt: -1 };
 
@@ -53,8 +54,17 @@ async function run() {
           ? { name: { $regex: search, $options: "i" } }
           : {};
 
+        const emailQuery = userEmail ? { sellerEmail: userEmail } : {};
+
+        const finalQuery = {
+          ...searchQuery,
+          ...emailQuery,
+        };
+
+        console.log("Final Query:", finalQuery);
+
         const properties = await propertiesCollection
-          .find(searchQuery, {
+          .find(finalQuery, {
             projection: {
               sellerEmail: 0,
               sellerImage: 0,
@@ -65,9 +75,11 @@ async function run() {
 
         res.send(properties);
       } catch (error) {
-        res.status(500).send([]);
+        console.log(error);
+        res.send([]);
       }
     });
+
 
     // Using
     app.get("/api/properties/featured", async (req, res) => {
@@ -97,16 +109,13 @@ async function run() {
       }
     });
 
-
-
+    // using 
     app.get("/api/properties/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const property = await propertiesCollection.findOne(query);
-      const userQuery = { email: property.userEmail };
-      res.send(property);
+      const result=await propertiesCollection.findOne({ _id: new ObjectId(req.params.id) });
+      res.send(result);
     });
 
+    // using
     app.post("/api/properties", async (req, res) => {
       const newProperty = req.body;
       const result = await propertiesCollection.insertOne(newProperty);
@@ -124,6 +133,7 @@ async function run() {
       res.send(result);
     });
 
+    // using 
     app.delete("/api/properties/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -143,45 +153,37 @@ async function run() {
       res.send(ratings);
     });
 
+    // using 
     app.get("/api/ratings/property/:propertyId", async (req, res) => {
-      const propertyId = req.params.propertyId;
-      const userEmail = req.query.email;
+      try {
+        const { propertyId } = req.params;
+        const { email, type } = req.query;
 
-      const query = {
-        propertyId: propertyId,
-        userEmail: { $ne: userEmail }, // exclude current user's rating
-      };
+        const query = { propertyId };
 
-      const ratings = await ratingsCollection.find(query).toArray();
-      res.send(ratings);
+        if (type === "others") {
+          query.userEmail = { $ne: email };
+          const result = await ratingsCollection.find(query).toArray();
+          return res.json(result); // ensure JSON
+        }
+
+        if (type === "my") {
+          query.userEmail = email;
+          const result = await ratingsCollection.findOne(query);
+          return res.json(result || {});
+        }
+      } catch (error) {
+      }
     });
 
-    app.get("/api/myRatings/property/:propertyId", async (req, res) => {
-      const propertyId = req.params.propertyId;
-      const userEmail = req.query.email;
-
-      const query = {
-        propertyId: propertyId,
-        userEmail: userEmail,
-      };
-
-      const result = await ratingsCollection.findOne(query);
-      res.send(result);
-    });
-
+    // using
     app.post("/api/ratings", async (req, res) => {
       const newRating = req.body;
       const result = await ratingsCollection.insertOne(newRating);
       res.send(result);
     });
 
-    app.delete("/api/ratings/:propertyId", async (req, res) => {
-      // console.log('delete rating called');
-      const propertyId = req.params.propertyId;
-      const query = { propertyId: propertyId };
-      const result = await ratingsCollection.deleteMany(query);
-      res.send(result);
-    });
+
   } finally {
   }
 }
